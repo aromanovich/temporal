@@ -26,6 +26,7 @@ package temporal
 
 import (
 	"fmt"
+	"go.temporal.io/server/common/persistence/visibility"
 	"net/http"
 
 	"golang.org/x/exp/slices"
@@ -60,20 +61,21 @@ type (
 
 		startupSynchronizationMode synchronizationModeParams
 
-		logger                     log.Logger
-		namespaceLogger            log.Logger
-		authorizer                 authorization.Authorizer
-		tlsConfigProvider          encryption.TLSConfigProvider
-		claimMapper                authorization.ClaimMapper
-		audienceGetter             authorization.JWTAudienceMapper
-		persistenceServiceResolver resolver.ServiceResolver
-		elasticsearchHttpClient    *http.Client
-		dynamicConfigClient        dynamicconfig.Client
-		customDataStoreFactory     persistenceClient.AbstractDataStoreFactory
-		clientFactoryProvider      client.FactoryProvider
-		searchAttributesMapper     searchattribute.Mapper
-		customInterceptors         []grpc.UnaryServerInterceptor
-		metricHandler              metrics.Handler
+		logger                       log.Logger
+		namespaceLogger              log.Logger
+		authorizer                   authorization.Authorizer
+		tlsConfigProvider            encryption.TLSConfigProvider
+		claimMapper                  authorization.ClaimMapper
+		audienceGetter               authorization.JWTAudienceMapper
+		persistenceServiceResolver   resolver.ServiceResolver
+		elasticsearchHttpClient      *http.Client
+		dynamicConfigClient          dynamicconfig.Client
+		customDataStoreFactory       persistenceClient.AbstractDataStoreFactory
+		customVisibilityStoreFactory visibility.VisibilityStoreFactory
+		clientFactoryProvider        client.FactoryProvider
+		searchAttributesMapper       searchattribute.Mapper
+		customInterceptors           []grpc.UnaryServerInterceptor
+		metricHandler                metrics.Handler
 	}
 )
 

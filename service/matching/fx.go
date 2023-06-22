@@ -149,6 +149,7 @@ func NamespaceReplicationQueueProvider(
 func VisibilityManagerProvider(
 	logger log.Logger,
 	persistenceConfig *config.Persistence,
+	customVisibilityStoreFactory visibility.VisibilityStoreFactory,
 	metricsHandler metrics.Handler,
 	serviceConfig *Config,
 	esClient esclient.Client,
@@ -159,6 +160,7 @@ func VisibilityManagerProvider(
 	return visibility.NewManager(
 		*persistenceConfig,
 		persistenceServiceResolver,
+		customVisibilityStoreFactory,
 		esClient,
 		nil, // matching visibility never writes
 		saProvider,

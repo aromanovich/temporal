@@ -27,6 +27,7 @@ package temporal
 import (
 	"context"
 	"fmt"
+	"go.temporal.io/server/common/persistence/visibility"
 	"strings"
 
 	"github.com/pborman/uuid"
@@ -111,6 +112,7 @@ type (
 
 		ServiceResolver        resolver.ServiceResolver
 		CustomDataStoreFactory persistenceClient.AbstractDataStoreFactory
+		CustomVisibilityStore  visibility.VisibilityStoreFactory
 
 		SearchAttributesMapper searchattribute.Mapper
 		CustomInterceptors     []grpc.UnaryServerInterceptor
@@ -269,6 +271,7 @@ func ServerOptionsProvider(opts []ServerOption) (serverOptionsProvider, error) {
 
 		ServiceResolver:        so.persistenceServiceResolver,
 		CustomDataStoreFactory: so.customDataStoreFactory,
+		CustomVisibilityStore:  so.customVisibilityStoreFactory,
 
 		SearchAttributesMapper: so.searchAttributesMapper,
 		CustomInterceptors:     so.customInterceptors,
@@ -349,6 +352,7 @@ type (
 		Authorizer                 authorization.Authorizer
 		ClaimMapper                authorization.ClaimMapper
 		DataStoreFactory           persistenceClient.AbstractDataStoreFactory
+		VisibilityStoreFactory     visibility.VisibilityStoreFactory
 		SpanExporters              []otelsdktrace.SpanExporter
 		InstanceID                 resource.InstanceID `optional:"true"`
 	}
@@ -386,6 +390,7 @@ func HistoryServiceProvider(
 			serviceName,
 		),
 		fx.Provide(func() persistenceClient.AbstractDataStoreFactory { return params.DataStoreFactory }),
+		fx.Provide(func() visibility.VisibilityStoreFactory { return params.VisibilityStoreFactory }),
 		fx.Provide(func() client.FactoryProvider { return params.ClientFactoryProvider }),
 		fx.Provide(func() authorization.JWTAudienceMapper { return params.AudienceGetter }),
 		fx.Provide(func() resolver.ServiceResolver { return params.PersistenceServiceResolver }),
@@ -436,6 +441,7 @@ func MatchingServiceProvider(
 			serviceName,
 		),
 		fx.Provide(func() persistenceClient.AbstractDataStoreFactory { return params.DataStoreFactory }),
+		fx.Provide(func() visibility.VisibilityStoreFactory { return params.VisibilityStoreFactory }),
 		fx.Provide(func() client.FactoryProvider { return params.ClientFactoryProvider }),
 		fx.Provide(func() authorization.JWTAudienceMapper { return params.AudienceGetter }),
 		fx.Provide(func() resolver.ServiceResolver { return params.PersistenceServiceResolver }),
@@ -494,6 +500,7 @@ func genericFrontendServiceProvider(
 			serviceName,
 		),
 		fx.Provide(func() persistenceClient.AbstractDataStoreFactory { return params.DataStoreFactory }),
+		fx.Provide(func() visibility.VisibilityStoreFactory { return params.VisibilityStoreFactory }),
 		fx.Provide(func() client.FactoryProvider { return params.ClientFactoryProvider }),
 		fx.Provide(func() authorization.JWTAudienceMapper { return params.AudienceGetter }),
 		fx.Provide(func() resolver.ServiceResolver { return params.PersistenceServiceResolver }),
@@ -560,6 +567,7 @@ func WorkerServiceProvider(
 			serviceName,
 		),
 		fx.Provide(func() persistenceClient.AbstractDataStoreFactory { return params.DataStoreFactory }),
+		fx.Provide(func() visibility.VisibilityStoreFactory { return params.VisibilityStoreFactory }),
 		fx.Provide(func() client.FactoryProvider { return params.ClientFactoryProvider }),
 		fx.Provide(func() authorization.JWTAudienceMapper { return params.AudienceGetter }),
 		fx.Provide(func() resolver.ServiceResolver { return params.PersistenceServiceResolver }),

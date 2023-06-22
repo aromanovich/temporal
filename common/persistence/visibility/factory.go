@@ -44,9 +44,19 @@ import (
 	"go.temporal.io/server/common/searchattribute"
 )
 
+type VisibilityStoreFactory interface {
+	NewVisibilityStore(
+		cfg config.CustomDatastoreConfig,
+		r resolver.ServiceResolver,
+		logger log.Logger,
+		metricsHandler metrics.Handler,
+	) (store.VisibilityStore, error)
+}
+
 func NewManager(
 	persistenceCfg config.Persistence,
 	persistenceResolver resolver.ServiceResolver,
+	customVisibilityStoreFactory VisibilityStoreFactory,
 
 	esClient esclient.Client,
 	esProcessorConfig *elasticsearch.ProcessorConfig,
@@ -66,6 +76,7 @@ func NewManager(
 	visibilityManager, err := newVisibilityManagerFromDataStoreConfig(
 		persistenceCfg.GetVisibilityStoreConfig(),
 		persistenceResolver,
+		customVisibilityStoreFactory,
 		esClient,
 		esProcessorConfig,
 		searchAttributesProvider,
@@ -88,6 +99,7 @@ func NewManager(
 	secondaryVisibilityManager, err := newVisibilityManagerFromDataStoreConfig(
 		persistenceCfg.GetSecondaryVisibilityStoreConfig(),
 		persistenceResolver,
+		customVisibilityStoreFactory,
 		esClient,
 		esProcessorConfig,
 		searchAttributesProvider,
@@ -167,6 +179,7 @@ func newVisibilityManager(
 func newVisibilityManagerFromDataStoreConfig(
 	dsConfig config.DataStore,
 	persistenceResolver resolver.ServiceResolver,
+	customVisibilityStoreFactory VisibilityStoreFactory,
 
 	esClient esclient.Client,
 	esProcessorConfig *elasticsearch.ProcessorConfig,
@@ -184,6 +197,7 @@ func newVisibilityManagerFromDataStoreConfig(
 	visStore, err := newVisibilityStoreFromDataStoreConfig(
 		dsConfig,
 		persistenceResolver,
+		customVisibilityStoreFactory,
 		esClient,
 		esProcessorConfig,
 		searchAttributesProvider,
@@ -212,6 +226,7 @@ func newVisibilityManagerFromDataStoreConfig(
 func newVisibilityStoreFromDataStoreConfig(
 	dsConfig config.DataStore,
 	persistenceResolver resolver.ServiceResolver,
+	customVisibilityStoreFactory VisibilityStoreFactory,
 
 	esClient esclient.Client,
 	esProcessorConfig *elasticsearch.ProcessorConfig,
@@ -254,6 +269,15 @@ func newVisibilityStoreFromDataStoreConfig(
 			metricsHandler,
 			logger,
 		)
+	} else if dsConfig.CustomDataStoreConfig != nil {
+		visStore, err = customVisibilityStoreFactory.NewVisibilityStore(
+			*dsConfig.CustomDataStoreConfig,
+			persistenceResolver,
+			logger,
+			metricsHandler,
+		)
+	} else {
+		return nil, nil
 	}
 	return visStore, err
 }

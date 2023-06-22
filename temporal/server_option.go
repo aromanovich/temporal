@@ -25,6 +25,7 @@
 package temporal
 
 import (
+	"go.temporal.io/server/common/persistence/visibility"
 	"net/http"
 
 	"google.golang.org/grpc"
@@ -152,6 +153,12 @@ func WithDynamicConfigClient(c dynamicconfig.Client) ServerOption {
 func WithCustomDataStoreFactory(customFactory persistenceclient.AbstractDataStoreFactory) ServerOption {
 	return applyFunc(func(s *serverOptions) {
 		s.customDataStoreFactory = customFactory
+	})
+}
+
+func WithCustomVisibilityStoreFactory(customFactory visibility.VisibilityStoreFactory) ServerOption {
+	return applyFunc(func(s *serverOptions) {
+		s.customVisibilityStoreFactory = customFactory
 	})
 }
 
