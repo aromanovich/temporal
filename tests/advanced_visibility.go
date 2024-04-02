@@ -151,6 +151,95 @@ func (s *AdvancedVisibilitySuite) SetupTest() {
 	s.testSearchAttributeVal = "test value"
 }
 
+func (s *AdvancedVisibilitySuite) TestVisibilityRace() {
+	id := "test-visibility-race"
+	wt := "test-visibility-race-type"
+	tl := "test-visibility-race-taskqueue"
+
+	// Step 1. Start execution
+	request := s.createStartWorkflowExecutionRequest(id, wt, tl)
+	we, err := s.engine.StartWorkflowExecution(NewContext(), request)
+	s.NoError(err)
+
+	searchAttributes, err := searchattribute.Encode(map[string]interface{}{
+		s.testSearchAttributeKey: "123-321",
+	}, nil)
+	s.NoError(err)
+
+	// Step 2. Upsert a search attribute
+	wtHandler := func(execution *commonpb.WorkflowExecution, wt *commonpb.WorkflowType,
+		previousStartedEventID, startedEventID int64, history *historypb.History) ([]*commandpb.Command, error) {
+
+		upsertCommand := &commandpb.Command{
+			CommandType: enumspb.COMMAND_TYPE_UPSERT_WORKFLOW_SEARCH_ATTRIBUTES,
+			Attributes: &commandpb.Command_UpsertWorkflowSearchAttributesCommandAttributes{
+				UpsertWorkflowSearchAttributesCommandAttributes: &commandpb.UpsertWorkflowSearchAttributesCommandAttributes{
+					SearchAttributes: searchAttributes,
+				},
+			},
+		}
+
+		return []*commandpb.Command{upsertCommand}, nil
+	}
+	taskQueue := &taskqueuepb.TaskQueue{Name: tl, Kind: enumspb.TASK_QUEUE_KIND_NORMAL}
+	poller := &TaskPoller{
+		Engine:              s.engine,
+		Namespace:           s.namespace,
+		TaskQueue:           taskQueue,
+		StickyTaskQueue:     taskQueue,
+		Identity:            "worker1",
+		WorkflowTaskHandler: wtHandler,
+		Logger:              s.Logger,
+		T:                   s.T(),
+	}
+	res, err := poller.PollAndProcessWorkflowTask(
+		WithPollSticky,
+		WithRespondSticky,
+		WithExpectedAttemptCount(0),
+		WithRetries(1),
+		WithForceNewWorkflowTask)
+	s.NoError(err)
+	newTask := res.NewTask
+	s.NotNil(newTask)
+	s.NotNil(newTask.WorkflowTask)
+
+	// Step 3. Terminate
+	_, err = s.engine.TerminateWorkflowExecution(
+		NewContext(),
+		&workflowservice.TerminateWorkflowExecutionRequest{
+			Namespace: s.namespace,
+			WorkflowExecution: &commonpb.WorkflowExecution{
+				WorkflowId: id,
+				RunId:      we.RunId,
+			},
+		},
+	)
+	s.NoError(err)
+
+	time.Sleep(waitForESToSettle)
+
+	// Step 4. Make sure workflow is terminated
+	descRequest := &workflowservice.DescribeWorkflowExecutionRequest{
+		Namespace: s.namespace,
+		Execution: &commonpb.WorkflowExecution{
+			WorkflowId: id,
+		},
+	}
+	descResp, err := s.engine.DescribeWorkflowExecution(NewContext(), descRequest)
+	s.NoError(err)
+	s.Equal(enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED, descResp.WorkflowExecutionInfo.Status)
+
+	// Step 5. Make sure visibility data is consistent with the persistence
+	listRequest := &workflowservice.ListWorkflowExecutionsRequest{
+		Namespace: s.namespace,
+		PageSize:  defaultPageSize,
+		Query:     `ExecutionStatus="Terminated"`,
+	}
+	resp, err := s.engine.ListWorkflowExecutions(NewContext(), listRequest)
+	s.NoError(err)
+	s.Len(resp.GetExecutions(), 1)
+}
+
 func (s *AdvancedVisibilitySuite) TestListOpenWorkflow() {
 	id := "es-functional-start-workflow-test"
 	wt := "es-functional-start-workflow-test-type"

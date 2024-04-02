@@ -26,6 +26,8 @@ package history
 
 import (
 	"context"
+	"os"
+	"time"
 
 	commonpb "go.temporal.io/api/common/v1"
 	enumspb "go.temporal.io/api/enums/v1"
@@ -35,6 +37,7 @@ import (
 	"go.temporal.io/server/common/definition"
 	"go.temporal.io/server/common/dynamicconfig"
 	"go.temporal.io/server/common/log"
+	"go.temporal.io/server/common/log/tag"
 	"go.temporal.io/server/common/metrics"
 	"go.temporal.io/server/common/namespace"
 	"go.temporal.io/server/common/persistence/visibility/manager"
@@ -192,6 +195,14 @@ func (t *visibilityQueueTaskExecutor) processUpsertExecution(
 	ctx context.Context,
 	task *tasks.UpsertExecutionVisibilityTask,
 ) (retError error) {
+	startedAt := time.Now().UTC()
+	defer func() {
+		t.logger.Info("processUpsertExecution",
+			tag.NewTimeTag("startedAt", startedAt),
+			tag.NewTimeTag("finishedAt", time.Now().UTC()),
+			tag.Error(retError),
+		)
+	}()
 	ctx, cancel := context.WithTimeout(ctx, taskTimeout)
 	defer cancel()
 
@@ -222,6 +233,12 @@ func (t *visibilityQueueTaskExecutor) processUpsertExecution(
 	// the rest of logic is making RPC call, which takes time.
 	release(nil)
 
+	if os.Getenv("SLOWDOWN_VISIBILITY_UPSERT") == "1" {
+		t.logger.Info("Sleeping for 1 second")
+		time.Sleep(time.Second)
+		t.logger.Info("Finished sleeping for 1 second")
+	}
+
 	return t.visibilityMgr.UpsertWorkflowExecution(
 		ctx,
 		&manager.UpsertWorkflowExecutionRequest{
@@ -234,6 +251,15 @@ func (t *visibilityQueueTaskExecutor) processCloseExecution(
 	parentCtx context.Context,
 	task *tasks.CloseExecutionVisibilityTask,
 ) (retError error) {
+	startedAt := time.Now().UTC()
+	defer func() {
+		t.logger.Info("processCloseExecution",
+			tag.NewTimeTag("startedAt", startedAt),
+			tag.NewTimeTag("finishedAt", time.Now().UTC()),
+			tag.Error(retError),
+		)
+	}()
+
 	ctx, cancel := context.WithTimeout(parentCtx, taskTimeout)
 	defer cancel()
 
