@@ -17,6 +17,8 @@ import (
 	persistencespb "go.temporal.io/server/api/persistence/v1"
 	"go.temporal.io/server/common/cluster"
 	"go.temporal.io/server/common/dynamicconfig"
+	"go.temporal.io/server/common/log"
+	"go.temporal.io/server/common/metrics"
 	"go.temporal.io/server/common/namespace"
 	"go.temporal.io/server/common/payloads"
 	"go.temporal.io/server/common/persistence/visibility/manager"
@@ -120,6 +122,8 @@ func (s *commandAttrValidatorSuite) SetupTest() {
 			s.mockVisibilityManager,
 			dynamicconfig.GetBoolPropertyFnFilteredByNamespace(false),
 			dynamicconfig.GetBoolPropertyFnFilteredByNamespace(false),
+			metrics.NoopMetricsHandler,
+			log.NewNoopLogger(),
 		))
 }
 
@@ -837,6 +841,63 @@ func (s *commandAttrValidatorSuite) TestValidateStartChildExecutionAttributes_In
 				s.ErrorAs(err, &invalidArgument)
 			} else {
 				s.NoError(err)
+			}
+		})
+	}
+}
+
+func (s *commandAttrValidatorSuite) TestValidateActivityScheduleAttributes_WorkflowTaskQueue() {
+	testCases := []struct {
+		name              string
+		workflowTaskQueue string
+		activityTaskQueue string
+		expectError       bool
+	}{
+		{
+			name:              "normal workflow scheduling activity on normal task queue is allowed",
+			workflowTaskQueue: "user-task-queue",
+			activityTaskQueue: "user-task-queue",
+			expectError:       false,
+		},
+		{
+			name:              "normal workflow scheduling activity on per-ns-tq is blocked",
+			workflowTaskQueue: "user-task-queue",
+			activityTaskQueue: primitives.PerNSWorkerTaskQueue,
+			expectError:       true,
+		},
+		{
+			name:              "per-ns-tq workflow scheduling activity on per-ns-tq is allowed",
+			workflowTaskQueue: primitives.PerNSWorkerTaskQueue,
+			activityTaskQueue: primitives.PerNSWorkerTaskQueue,
+			expectError:       false,
+		},
+	}
+
+	for _, tt := range testCases {
+		s.Run(tt.name, func() {
+			attributes := &commandpb.ScheduleActivityTaskCommandAttributes{
+				ActivityId:          "test-activity-id",
+				ActivityType:        &commonpb.ActivityType{Name: "test-activity-type"},
+				TaskQueue:           &taskqueuepb.TaskQueue{Name: tt.activityTaskQueue},
+				StartToCloseTimeout: durationpb.New(10 * time.Second),
+			}
+
+			fc, err := s.validator.ValidateActivityScheduleAttributes(
+				s.testNamespaceID,
+				attributes,
+				durationpb.New(0),
+				tt.workflowTaskQueue,
+			)
+
+			if tt.expectError {
+				s.Error(err)
+				var invalidArgument *serviceerror.InvalidArgument
+				s.ErrorAs(err, &invalidArgument)
+				s.Contains(err.Error(), "internal per-namespace task queue")
+				s.Equal(enumspb.WORKFLOW_TASK_FAILED_CAUSE_BAD_SCHEDULE_ACTIVITY_ATTRIBUTES, fc)
+			} else {
+				s.NoError(err)
+				s.Equal(enumspb.WORKFLOW_TASK_FAILED_CAUSE_UNSPECIFIED, fc)
 			}
 		})
 	}
